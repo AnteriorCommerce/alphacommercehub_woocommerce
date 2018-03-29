@@ -13,7 +13,7 @@ class WC_Gateway_Alphacard extends WC_Payment_Gateway {
     public function __construct() {
         $this->id                 = 'alphacard';
         $this->icon               = apply_filters( 'woocommerce_cod_icon', '' );
-        $this->method_title       = __( 'Bank Card (Alpha Commerce Hub)', 'woocommerce' );
+        $this->method_title       = __( 'Credit Card (Alpha Commerce Hub)', 'woocommerce' );
         $this->method_description = __( 'Alpha bank web payment system.', 'woocommerce' );
         $this->has_fields         = false;
 
@@ -85,6 +85,20 @@ class WC_Gateway_Alphacard extends WC_Payment_Gateway {
 				'description' => __( 'Payment method description that the customer will see on your checkout.', 'woocommerce' ),
 				'default'     => __( 'Bank Card (Alpha Commerce Hub)', 'woocommerce' ),
 				'desc_tip'    => true,
+			),
+			'url' => array(
+				'title'       => __( 'Hosted Payment Page URL', 'woocommerce' ),
+				'type'        => 'text',
+				'description' => __( 'Hosted Payment Page URL that the customer will use for UAT or Production.', 'woocommerce' ),
+				'default'     => __( '', 'woocommerce' ),
+				'desc_tip'    => true,
+			),
+			'UserID' => array(
+				'title'       => __( 'User ID', 'woocommerce' ),
+				'type'        => 'text',
+				'description' => __( 'User ID', 'woocommerce' ),
+				'default'     => __( '', 'woocommerce' ),
+				
 			),
 			'description' => array(
 				'title'       => __( 'Description', 'woocommerce' ),
@@ -171,12 +185,40 @@ class WC_Gateway_Alphacard extends WC_Payment_Gateway {
 						
 		$form_data = $this->get_alpha_args($order, $uniqid, 0);
 		$digest = base64_encode(sha1(implode("", array_merge($form_data, array('secret' => $this->Secret))), true));
-
-		$html_form_fields = array();
-		foreach ($form_data as $key => $value) {
-			$html_form_fields[] = '<input type="hidden" name="'.esc_attr( $key ).'" value="'.esc_attr($value).'" />';
-		}
+$aa= str_replace('\"',"",$_POST['data']);
+		$a=explode(",",$aa);
 		
+		foreach($a as $au){
+			$uu=str_replace(":",",",$au);
+			$u=explode(",",$uu);
+			//print_r($u);
+		if($u[0] == 'MerchantTxnID' || $u[0] == 'Status'){
+			$aaa[$u[0]] = $u[1];
+			}
+			}
+			//echo $aaa['MerchantTxnID'];
+			if($aaa['MerchantTxnID'] != '' && $aaa['Status'] == 0){
+				global $woocommerce;
+				
+				global $wpdb;
+				$wpdb->update( 
+	'wp_posts', 
+	array( 
+		'post_status' => 'wc-completed'	// string
+	), 
+	array( 'ID' => $aaa['MerchantTxnID'] ), 
+	array( 
+		'%s'	// value1
+	), 
+	array( '%d' ) 
+);
+
+     $woocommerce->cart->empty_cart();
+WC()->mailer()->emails['WC_Email_Customer_Processing_Order']->trigger($order_id);
+WC()->mailer()->emails['WC_Email_New_Order']->trigger($order_id);
+    $url=site_url(); 
+      wp_redirect($this->get_return_url( $order ));
+			}
 		?>
 
 
@@ -192,22 +234,38 @@ class WC_Gateway_Alphacard extends WC_Payment_Gateway {
 
 
 		</script>
-				<form id="shopform1" name="shopform1" method="POST" action="<?php echo 'https://hubuat.alphacommercehub.com.au/pp/bf8cb1c7-33c5-451b-aa48-498c76392f95'; ?>" accept-charset="UTF-8" >
-			<?php foreach($html_form_fields as $field)
-				
-			?>
-					<input type="hidden" name="Amount" value="<?php echo wc_format_decimal($order->get_total(), 2, true); ?>">
-					<input type="hidden" name="Currency" value="<?php echo $order->get_currency(); ?>">
-					<input type="hidden" name="MerchantTxnID" value="<?php echo $order_id; ?>">
-					<?php if($this->get_option( '3dSecure') == 'yes') { $testmode = 'N'; } else { $testmode = 'Y'; }  ?>
-					<input type="hidden" name="3DSecureBypass" maxlength="1" value="<?php echo $testmode; ?>">
+<?php $order = wc_get_order( $order_id );
+			//print_r($order);
+			$items = $order->get_items();
+			 foreach ( $items as $item ) {
+						//print_r($item);
+     $product_name = $item->get_name();
+     $product_amount[] = $item->get_subtotal();
+     $quantity[] = $item->get_quantity();
+    $product_variation_id = $item->get_variation_id(); }
+    $product_amount=array_sum($product_amount);
+    $quantity=array_sum($quantity);
+     $product_name=str_replace(" ","",$product_name);
+    ?>
+
+		<?php $total = wc_format_decimal($order->get_total(), 2, true) * 1000 ; ?>
+				<form id="shopform1" name="shopform1" method="POST" action="<?php echo 'https://hubuat.alphacommercehub.com.au/pp/'.$this->get_option('url'); ?>" accept-charset="UTF-8" >
+			
 					<input type="hidden" name="MerchantID" value="<?php echo $this->get_option('MerchantId'); ?>">
-					<input type="hidden" name="UserId" value="1">	
-					<input type="hidden" name="Version" value="2">	
-					<input type="hidden" name="Method" value="CC">		
-					<input type="hidden" name="ChannelType" value="07">		
-					<input type="hidden" name="TransactionType" value="AuthPayment">		
-	
+					<input type="hidden" name="Amount" value="<?php echo wc_format_decimal(($order->get_total()* 1000), 2, true); ?>">
+                    <?php if($this->get_option( '3dSecure') == 'yes') { $testmode = 'N'; } else { $testmode = 'Y'; }  ?>
+					<input type="hidden" name="3DSecureBypass" maxlength="1" value="<?php echo $testmode; ?>">
+					<input type="hidden" name="Country" value="<?php echo 'AUSTRALIA'; ?>">
+					<input type="hidden" name="Currency" value="<?php echo $order->get_currency(); ?>">
+					
+					<input type="hidden" name="MerchantTxnID" value="<?php echo $order_id; ?>">
+					<input type="hidden" name="OrderDetails[0].ItemAmount" value="<?php echo wc_format_decimal(($order->get_total()* 1000), 2, true); ?>">	
+					<input type="hidden" name="OrderDetails[0].ItemName" value="<?php echo $product_name; ?>">	
+					<input type="hidden" name="OrderDetails[0].ItemDescription" value="<?php echo $product_name; ?>">	
+					<input type="hidden" name="OrderDetails[0].ItemQuantity" value="<?php echo $quantity; ?>">
+					<input type="hidden" name="UserId" value="<?php echo $this->get_option('UserID'); ?>">	
+					<input type="hidden" name="SuccessURL" value="<?php echo $order->get_checkout_payment_url( true ); ?>">	
+	                                <input type="hidden" name="CancelURL" value="<?php echo $order->get_cancel_order_url(); ?>">
 			
 			<input type="submit" class="button alt" id="submit_twocheckout_payment_form" value="<?php echo __( 'Pay via Alpha bank', 'woocommerce' ) ?>" /> 
 			<a class="button cancel" href="<?php echo esc_url( $order->get_cancel_order_url() )?>"><?php echo __( 'Cancel order &amp; restore cart', 'woocommerce' )?></a>
