@@ -1,7 +1,7 @@
 <?php
 
 if ( ! defined( 'ABSPATH' ) ) {
-    exit; // Exit if accessed directly
+    exit;; // Exit if accessed directly
 }
 
 class WC_Gateway_Alphacard extends WC_Payment_Gateway {
